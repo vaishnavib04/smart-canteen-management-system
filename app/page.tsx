@@ -27,6 +27,43 @@ type InventoryItem = {
   low_stock: number | boolean;
 };
 
+type OrderItem = {
+  item_id: number;
+  name: string;
+  quantity: number;
+  price_at_order: string | number;
+};
+
+type Order = {
+  order_id: number;
+  order_date: string;
+  status: string;
+  total_amount: string | number;
+  user_id: number;
+  user_name: string;
+  slot_id: number;
+  items: OrderItem[];
+};
+
+type SalesSummary = {
+  summary: {
+    total_orders: number;
+    successful_payments: number;
+    total_sales: number;
+  };
+  orders_by_status: { status: string; order_count: number }[];
+  daily_sales: {
+    sale_date: string;
+    order_count: number;
+    total_sales: number;
+  }[];
+  sales_by_payment_mode: {
+    payment_mode: string;
+    payment_count: number;
+    total_amount: number;
+  }[];
+};
+
 type DashboardData = {
   categories: Category[];
   foodItems: FoodItem[];
@@ -49,6 +86,11 @@ export default function Home() {
     inventory: [],
   });
 
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [sales, setSales] = useState<SalesSummary | null>(null);
+  const [ordersError, setOrdersError] = useState("");
+  const [updatingOrder, setUpdatingOrder] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -57,12 +99,19 @@ export default function Home() {
     setError("");
 
     try {
-      const [categoriesResponse, foodResponse, inventoryResponse] =
-        await Promise.all([
-          fetch("/api/categories"),
-          fetch("/api/food-items"),
-          fetch("/api/inventory"),
-        ]);
+      const [
+      categoriesResponse,
+      foodResponse,
+      inventoryResponse,
+      ordersResponse,
+      salesResponse,
+    ] = await Promise.all([
+      fetch("/api/categories"),
+      fetch("/api/food-items"),
+      fetch("/api/inventory"),
+      fetch("/api/orders"),
+      fetch("/api/sales-summary"),
+    ]);
 
       if (
         !categoriesResponse.ok ||
@@ -73,27 +122,69 @@ export default function Home() {
       }
 
       const [categoriesData, foodData, inventoryData] = await Promise.all([
-        categoriesResponse.json(),
-        foodResponse.json(),
-        inventoryResponse.json(),
-      ]);
+      categoriesResponse.json(),
+      foodResponse.json(),
+      inventoryResponse.json(),
+    ]);
 
-      setData({
-        categories: Array.isArray(categoriesData)
-          ? categoriesData
-          : categoriesData.categories ?? [],
-        foodItems: Array.isArray(foodData)
-          ? foodData
-          : foodData.foodItems ?? foodData.items ?? [],
-        inventory: Array.isArray(inventoryData.inventory)
-          ? inventoryData.inventory
-          : [],
-      });
+    setData({
+      categories: Array.isArray(categoriesData)
+        ? categoriesData
+        : categoriesData.categories ?? [],
+      foodItems: Array.isArray(foodData)
+      ? foodData
+      : foodData.food_items ?? foodData.foodItems ?? foodData.items ?? [],
+      inventory: Array.isArray(inventoryData.inventory)
+        ? inventoryData.inventory
+        : [],
+    });
+
+    if (ordersResponse.ok) {
+      const ordersData = await ordersResponse.json();
+      setOrders(Array.isArray(ordersData.orders) ? ordersData.orders : []);
+      setOrdersError("");
+    } else {
+      setOrdersError("Could not load orders.");
+    }
+
+    if (salesResponse.ok) {
+      setSales(await salesResponse.json());
+    } else {
+      setSales(null);
+    }
+
     } catch (err) {
       console.error("Dashboard loading failed:", err);
       setError("Unable to load dashboard data. Check that the APIs are running.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function updateOrderStatus(orderId: number, status: string) {
+    setUpdatingOrder(orderId);
+    setOrdersError("");
+
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to update order.");
+      }
+
+      await loadDashboard();
+    } catch (err) {
+      setOrdersError(
+        err instanceof Error ? err.message : "Failed to update order."
+      );
+    } finally {
+      setUpdatingOrder(null);
     }
   }
 
@@ -508,46 +599,252 @@ export default function Home() {
 
           <section
             id="orders"
-            className="rounded-2xl border border-dashed border-slate-300 bg-white p-6"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
           >
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-xl text-blue-600">
-                ↗
-              </div>
+            <div className="flex items-center justify-between border-b border-slate-100 p-5">
               <div>
                 <h3 className="font-bold">Order management</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  The order-events API currently records events in MongoDB.
-                  Actual order retrieval and status management still need to be
-                  connected to the MySQL orders tables.
+                <p className="mt-1 text-sm text-slate-500">
+                  View incoming orders and manage preparation status.
                 </p>
-                <span className="mt-3 inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                  Integration pending
-                </span>
               </div>
+              <span className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-bold text-blue-700">
+                {orders.length} orders
+              </span>
+            </div>
+
+            {ordersError && (
+              <p className="m-5 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                {ordersError}
+              </p>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-5 py-4">Order</th>
+                    <th className="px-5 py-4">Customer</th>
+                    <th className="px-5 py-4">Items</th>
+                    <th className="px-5 py-4">Total</th>
+                    <th className="px-5 py-4">Status</th>
+                    <th className="px-5 py-4">Update</th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {orders.map((order) => {
+                    const locked =
+                      order.status === "Completed" || order.status === "Cancelled";
+
+                    return (
+                      <tr key={order.order_id} className="align-top hover:bg-slate-50">
+                        <td className="px-5 py-4">
+                          <p className="font-bold">#{order.order_id}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {new Date(order.order_date).toLocaleDateString()}
+                          </p>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <p className="font-semibold">{order.user_name}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            Customer ID: {order.user_id}
+                          </p>
+                        </td>
+
+                        <td className="max-w-xs px-5 py-4">
+                          {order.items.map((item, index) => (
+                            <p key={`${item.item_id}-${index}`} className="mb-1">
+                              {item.name} × {item.quantity}
+                            </p>
+                          ))}
+                        </td>
+
+                        <td className="px-5 py-4 font-bold">
+                          ₹{Number(order.total_amount).toFixed(2)}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                            {order.status}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <div className="flex flex-col gap-2">
+                            <select
+                              id={`status-${order.order_id}`}
+                              defaultValue={order.status}
+                              disabled={locked || updatingOrder === order.order_id}
+                              className="rounded-lg border border-slate-200 px-2 py-2 text-xs disabled:bg-slate-100"
+                            >
+                              {[
+                                "Pending",
+                                "Confirmed",
+                                "Preparing",
+                                "Ready",
+                                "Completed",
+                                "Cancelled",
+                              ].map((status) => (
+                                <option key={status} value={status}>
+                                  {status}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              disabled={locked || updatingOrder === order.order_id}
+                              onClick={() => {
+                                const select = document.getElementById(
+                                  `status-${order.order_id}`
+                                ) as HTMLSelectElement | null;
+
+                                if (select && select.value !== order.status) {
+                                  void updateOrderStatus(order.order_id, select.value);
+                                }
+                              }}
+                              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              {updatingOrder === order.order_id
+                                ? "Updating..."
+                                : locked
+                                  ? "Closed"
+                                  : "Update status"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {orders.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-10 text-center text-slate-400">
+                        No orders to display.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </section>
 
           <section
             id="sales"
-            className="rounded-2xl border border-dashed border-slate-300 bg-white p-6"
+            className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
           >
-            <div className="flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-xl text-violet-600">
-                ▥
-              </div>
-              <div>
-                <h3 className="font-bold">Sales reports</h3>
-                <p className="mt-2 text-sm leading-6 text-slate-500">
-                  Sales totals and order summaries will be displayed here once
-                  they are connected to your MySQL orders and payment records.
-                </p>
-                <span className="mt-3 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                  Coming next
-                </span>
-              </div>
+            <div className="border-b border-slate-100 p-5">
+              <h3 className="font-bold">Sales reports</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Sales totals, payment methods and order-status breakdown.
+              </p>
             </div>
+
+            {!sales ? (
+              <p className="p-6 text-sm text-slate-500">
+                Sales summary is unavailable. Try refreshing the dashboard.
+              </p>
+            ) : (
+              <div className="space-y-6 p-5">
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-xl bg-emerald-50 p-4">
+                    <p className="text-sm text-emerald-700">Total sales</p>
+                    <p className="mt-2 text-2xl font-bold text-emerald-800">
+                      ₹{sales.summary.total_sales.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-blue-50 p-4">
+                    <p className="text-sm text-blue-700">Total orders</p>
+                    <p className="mt-2 text-2xl font-bold text-blue-800">
+                      {sales.summary.total_orders}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-violet-50 p-4">
+                    <p className="text-sm text-violet-700">Successful payments</p>
+                    <p className="mt-2 text-2xl font-bold text-violet-800">
+                      {sales.summary.successful_payments}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <div>
+                    <h4 className="mb-3 font-semibold">Orders by status</h4>
+                    <div className="space-y-3">
+                      {sales.orders_by_status.map((item) => (
+                        <div
+                          key={item.status}
+                          className="flex items-center justify-between rounded-lg bg-slate-50 p-3"
+                        >
+                          <span className="text-sm">{item.status}</span>
+                          <span className="font-bold">{item.order_count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-3 font-semibold">Sales by payment mode</h4>
+                    <div className="space-y-3">
+                      {sales.sales_by_payment_mode.map((item) => (
+                        <div
+                          key={item.payment_mode}
+                          className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 p-3"
+                        >
+                          <div>
+                            <p className="text-sm font-semibold">{item.payment_mode}</p>
+                            <p className="text-xs text-slate-400">
+                              {item.payment_count} payment(s)
+                            </p>
+                          </div>
+                          <span className="font-bold">
+                            ₹{item.total_amount.toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="mb-3 font-semibold">Daily sales</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[400px] text-left text-sm">
+                      <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Date</th>
+                          <th className="px-4 py-3">Orders</th>
+                          <th className="px-4 py-3">Sales</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {sales.daily_sales.map((item) => (
+                          <tr key={item.sale_date}>
+                            <td className="px-4 py-3">{item.sale_date}</td>
+                            <td className="px-4 py-3">{item.order_count}</td>
+                            <td className="px-4 py-3 font-semibold">
+                              ₹{item.total_sales.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                        {sales.daily_sales.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-4 py-6 text-center text-slate-400">
+                              No sales recorded yet.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
+          
 
           <footer className="flex flex-col gap-2 border-t border-slate-200 py-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
             <p>Smart Canteen Pre-Order & Inventory Management System</p>

@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.13",
     "mongodb": "^7.7.0",
     "mysql2": "^3.24.6",
     "next": "16.4.3",

@@ -1,3 +1,4 @@
+import { getSession } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
@@ -54,9 +55,33 @@ interface CreatedOrderRow extends RowDataPacket {
 // GET /api/orders
 // Optional: /api/orders?user_id=1
 export async function GET(request: Request) {
+  const session = await getSession();
+
+  if (!session) {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const userIdParam = searchParams.get("user_id");
+
+    if (session.role === "Student") {
+      const requestedUserId =
+        userIdParam === null ? session.userId : Number(userIdParam);
+
+      if (
+        !Number.isSafeInteger(requestedUserId) ||
+        requestedUserId !== session.userId
+      ) {
+        return NextResponse.json(
+          { error: "You can only view your own orders." },
+          { status: 403 }
+        );
+      }
+    }
 
     let sql = `
       SELECT
@@ -73,10 +98,13 @@ export async function GET(request: Request) {
 
     const params: number[] = [];
 
-    if (userIdParam !== null) {
+    if (session.role === "Student") {
+      sql += " WHERE o.user_id = ?";
+      params.push(session.userId);
+    } else if (userIdParam !== null) {
       const userId = Number(userIdParam);
 
-      if (!Number.isInteger(userId) || userId <= 0) {
+      if (!Number.isSafeInteger(userId) || userId <= 0) {
         return NextResponse.json(
           { error: "A valid user_id is required" },
           { status: 400 }
@@ -135,6 +163,14 @@ export async function GET(request: Request) {
 //   ]
 // }
 export async function POST(request: Request) {
+    const session = await getSession();
+
+  if (!session) {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
   let body: unknown;
 
   try {
@@ -158,22 +194,9 @@ export async function POST(request: Request) {
   }
 
   const data = body as Record<string, unknown>;
-  const userIdValue = data.user_id;
+  const userId = session.userId;
   const slotIdValue = data.slot_id;
   const requestedItems = data.items;
-
-  if (
-    typeof userIdValue !== "number" ||
-    !Number.isSafeInteger(userIdValue) ||
-    userIdValue <= 0
-  ) {
-    return NextResponse.json(
-      { error: "A valid user_id is required" },
-      { status: 400 }
-    );
-  }
-
-  const userId: number = userIdValue;
 
   if (
     slotIdValue !== undefined &&

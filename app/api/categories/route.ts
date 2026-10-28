@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
+import { requireStaffOrAdmin } from "@/src/lib/auth";
 
 interface CategoryRow extends RowDataPacket {
   category_id: number;
@@ -25,6 +26,22 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireStaffOrAdmin();
+
+  if (auth.error === "UNAUTHENTICATED") {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
+  if (auth.error === "FORBIDDEN") {
+    return NextResponse.json(
+      { error: "Only Staff or Admin can create categories." },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await request.json();
     const categoryName =

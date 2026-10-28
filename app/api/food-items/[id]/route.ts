@@ -1,3 +1,4 @@
+import { requireStaffOrAdmin } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
@@ -46,6 +47,21 @@ function isDatabaseError(
 
 // PATCH /api/food-items/1
 export async function PATCH(request: Request, context: RouteContext) {
+  const auth = await requireStaffOrAdmin();
+
+  if (auth.error === "UNAUTHENTICATED") {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
+  if (auth.error === "FORBIDDEN") {
+    return NextResponse.json(
+      { error: "Only Staff or Admin can update food items." },
+      { status: 403 }
+    );
+  }
   const itemId = await parseId(context);
 
   if (itemId === null) {
@@ -271,6 +287,21 @@ export async function PATCH(request: Request, context: RouteContext) {
 // DELETE /api/food-items/1
 // Soft delete: preserve the item and its historical order references.
 export async function DELETE(_request: Request, context: RouteContext) {
+    const auth = await requireStaffOrAdmin();
+
+  if (auth.error === "UNAUTHENTICATED") {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
+  if (auth.error === "FORBIDDEN") {
+    return NextResponse.json(
+      { error: "Only Staff or Admin can deactivate food items." },
+      { status: 403 }
+    );
+  }
   const itemId = await parseId(context);
 
   if (itemId === null) {

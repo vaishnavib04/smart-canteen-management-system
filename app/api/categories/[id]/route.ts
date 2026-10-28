@@ -1,3 +1,4 @@
+import { requireStaffOrAdmin } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
@@ -24,6 +25,21 @@ async function getCategoryId(context: RouteContext) {
 
 // PATCH /api/categories/1
 export async function PATCH(request: Request, context: RouteContext) {
+  const auth = await requireStaffOrAdmin();
+
+  if (auth.error === "UNAUTHENTICATED") {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
+  if (auth.error === "FORBIDDEN") {
+    return NextResponse.json(
+      { error: "Only Staff or Admin can update categories." },
+      { status: 403 }
+    );
+  }
   const categoryId = await getCategoryId(context);
 
   if (categoryId === null) {
@@ -110,6 +126,21 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 // DELETE /api/categories/1
 export async function DELETE(_request: Request, context: RouteContext) {
+  const auth = await requireStaffOrAdmin();
+
+  if (auth.error === "UNAUTHENTICATED") {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
+  if (auth.error === "FORBIDDEN") {
+    return NextResponse.json(
+      { error: "Only Staff or Admin can delete categories." },
+      { status: 403 }
+    );
+  }
   const categoryId = await getCategoryId(context);
 
   if (categoryId === null) {
