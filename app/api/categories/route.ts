@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 
-export const runtime = "nodejs";
-
 interface CategoryRow extends RowDataPacket {
   category_id: number;
   category_name: string;

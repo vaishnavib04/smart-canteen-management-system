@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/src/lib/mongodb";
 
-export const runtime = "nodejs";
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();

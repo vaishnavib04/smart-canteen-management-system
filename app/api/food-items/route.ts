@@ -6,8 +6,6 @@ import type {
   PoolConnection,
 } from "mysql2/promise";
 
-export const runtime = "nodejs";
-
 interface FoodItemRow extends RowDataPacket {
   item_id: number;
   name: string;
