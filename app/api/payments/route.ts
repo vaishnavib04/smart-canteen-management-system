@@ -1,3 +1,4 @@
+import { getSession, requireStaffOrAdmin } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type {
@@ -26,6 +27,14 @@ const PAYMENT_MODES = ["Cash", "Card", "UPI", "Wallet"];
 // Optional filter: /api/payments?order_id=8
 export async function GET(request: Request) {
   try {
+    const session = await getSession();
+
+    if (!session) {
+      return NextResponse.json(
+        { error: "Please log in first." },
+        { status: 401 }
+      );
+    }
     const { searchParams } = new URL(request.url);
     const orderIdParam = searchParams.get("order_id");
 
@@ -57,6 +66,14 @@ export async function GET(request: Request) {
 
     sql += " ORDER BY p.payment_id DESC";
 
+    if (session.role === "Student") {
+      sql += sql.includes("WHERE")
+        ? " AND EXISTS (SELECT 1 FROM orders o WHERE o.order_id = p.order_id AND o.user_id = ?)"
+        : " WHERE EXISTS (SELECT 1 FROM orders o WHERE o.order_id = p.order_id AND o.user_id = ?)";
+
+      params.push(session.userId);
+    }
+
     const [payments] = await pool.execute<PaymentRow[]>(sql, params);
 
     return NextResponse.json({
@@ -76,6 +93,14 @@ export async function GET(request: Request) {
 // POST /api/payments
 // Body: { "order_id": 8, "payment_mode": "UPI" }
 export async function POST(request: Request) {
+  const session = await getSession();
+
+  if (!session) {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
   let body: unknown;
 
   try {
@@ -146,6 +171,22 @@ export async function POST(request: Request) {
     }
 
     const order = orders[0];
+
+    if (session.role === "Student") {
+      const [ownedOrders] = await connection.execute<RowDataPacket[]>(
+        "SELECT order_id FROM orders WHERE order_id = ? AND user_id = ?",
+        [orderId, session.userId]
+      );
+
+      if (ownedOrders.length === 0) {
+        await connection.rollback();
+
+        return NextResponse.json(
+          { error: "You can only pay for your own orders." },
+          { status: 403 }
+        );
+      }
+    }
 
     if (order.status === "Cancelled") {
       await connection.rollback();

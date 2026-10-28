@@ -1,3 +1,4 @@
+import { requireStaffOrAdmin } from "@/src/lib/auth";
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { RowDataPacket } from "mysql2/promise";
@@ -57,6 +58,21 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+    const auth = await requireStaffOrAdmin();
+
+  if (auth.error === "UNAUTHENTICATED") {
+    return NextResponse.json(
+      { error: "Please log in first." },
+      { status: 401 }
+    );
+  }
+
+  if (auth.error === "FORBIDDEN") {
+    return NextResponse.json(
+      { error: "Only Staff or Admin can update inventory." },
+      { status: 403 }
+    );
+  }
   try {
     const body = await request.json();
 
