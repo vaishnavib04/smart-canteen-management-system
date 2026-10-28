@@ -1,5 +1,7 @@
 USE smart_canteen_db;
 
+DROP TRIGGER IF EXISTS before_inventory_update;
+
 DELIMITER //
 
 CREATE TRIGGER before_inventory_update

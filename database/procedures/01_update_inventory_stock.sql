@@ -1,5 +1,7 @@
 USE smart_canteen_db;
 
+DROP PROCEDURE IF EXISTS UpdateInventoryStock;
+
 DELIMITER //
 
 CREATE PROCEDURE UpdateInventoryStock(

@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import pool from "@/src/lib/db";
-import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { RowDataPacket } from "mysql2/promise";
 import { logActivity } from "@/src/lib/activity-log";
-
-export const runtime = "nodejs";
 
 interface InventoryRow extends RowDataPacket {
   inventory_id: number;
@@ -80,14 +78,19 @@ export async function PATCH(request: Request) {
         (!Number.isInteger(reorderLevel) || reorderLevel < 0))
     ) {
       return NextResponse.json(
-        { error: "Stock quantity and reorder level must be non-negative integers" },
+        {
+          error:
+            "Stock quantity and reorder level must be non-negative integers",
+        },
         { status: 400 }
       );
     }
 
     if (quantity === undefined && reorderLevel === undefined) {
       return NextResponse.json(
-        { error: "Provide quantity_available or reorder_level to update" },
+        {
+          error: "Provide quantity_available or reorder_level to update",
+        },
         { status: 400 }
       );
     }
@@ -111,27 +114,24 @@ export async function PATCH(request: Request) {
         );
       }
 
-      const updates: string[] = [];
-      const values: number[] = [];
-
+      // Use the stored procedure to update the stock quantity.
       if (quantity !== undefined) {
-        updates.push("quantity_available = ?");
-        values.push(quantity);
+        await connection.execute(
+          "CALL UpdateInventoryStock(?, ?)",
+          [inventoryId, quantity]
+        );
       }
 
+      // Update the reorder level directly when supplied.
       if (reorderLevel !== undefined) {
-        updates.push("reorder_level = ?");
-        values.push(reorderLevel);
+        await connection.execute(
+          "UPDATE inventory SET reorder_level = ? WHERE inventory_id = ?",
+          [reorderLevel, inventoryId]
+        );
       }
-
-      values.push(inventoryId);
-
-      await connection.execute<ResultSetHeader>(
-        `UPDATE inventory SET ${updates.join(", ")} WHERE inventory_id = ?`,
-        values
-      );
 
       await connection.commit();
+
       await logActivity({
         action: "INVENTORY_UPDATED",
         entity: "inventory",
@@ -140,7 +140,7 @@ export async function PATCH(request: Request) {
           quantity_available: quantity ?? null,
           reorder_level: reorderLevel ?? null,
         },
-       });
+      });
 
       return NextResponse.json({
         message: "Inventory updated successfully",

@@ -1,5 +1,7 @@
 USE smart_canteen_db;
 
+DROP FUNCTION IF EXISTS IsLowStock;
+
 DELIMITER //
 
 CREATE FUNCTION IsLowStock(
