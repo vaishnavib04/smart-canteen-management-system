@@ -40,7 +40,7 @@ export default function StudentLoginPage() {
       }
 
       // Staff and Admin use the management dashboard instead.
-      router.push(data.user.role === "Student" ? "/student" : "/");
+      router.push(data.user.role === "Student" ? "/student" : "/dashboard");
     } catch {
       setError("Could not reach the server. Please try again.");
     } finally {
@@ -58,7 +58,7 @@ export default function StudentLoginPage() {
           QuickBite Canteen
         </p>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">
-          {mode === "login" ? "Student login" : "Create student account"}
+          {mode === "login" ? "Account login" : "Create student account"}
         </h1>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">

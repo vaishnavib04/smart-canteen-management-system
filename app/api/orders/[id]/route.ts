@@ -2,6 +2,7 @@ import { requireStaffOrAdmin } from "@/src/lib/auth";
 import { connection, NextResponse } from "next/server";
 import pool from "@/src/lib/db";
 import type { RowDataPacket } from "mysql2/promise";
+import clientPromise from "@/src/lib/mongodb";
 
 const allowedStatuses = [
   "Pending",
@@ -95,6 +96,27 @@ export async function PATCH(
       "UPDATE orders SET status = ? WHERE order_id = ?",
       [newStatus, orderId]
     );
+
+    try {
+      const client = await clientPromise;
+      const database = client.db(
+        process.env.MONGODB_DATABASE || "smart_canteen_logs"
+      );
+
+      await database.collection("order_events").insertOne({
+        order_id: orderId,
+        event: "ORDER_STATUS_UPDATED",
+        details: {
+          previous_status: oldStatus,
+          status: newStatus,
+          changed_by_user_id: auth.user.userId,
+          changed_by_email: auth.user.email,
+        },
+        timestamp: new Date(),
+      });
+    } catch (error) {
+      console.error("Order status updated, but event logging failed:", error);
+    }
 
     return NextResponse.json({
       message: "Order status updated successfully",
