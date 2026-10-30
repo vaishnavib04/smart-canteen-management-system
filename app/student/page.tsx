@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type User = { user_id: number; name: string; email: string; role: string };
@@ -216,12 +217,20 @@ export default function StudentMenuPage() {
           </p>
           <h1 className="text-lg font-bold">Hello, {user.name}</h1>
         </div>
-        <button
-          onClick={handleLogout}
-          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
-        >
-          Log out
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/student/orders"
+            className="rounded-xl px-4 py-2 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-700"
+          >
+            Order history
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+          >
+            Log out
+          </button>
+        </div>
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[1fr_340px]">

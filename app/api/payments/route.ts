@@ -64,8 +64,6 @@ export async function GET(request: Request) {
       params.push(orderId);
     }
 
-    sql += " ORDER BY p.payment_id DESC";
-
     if (session.role === "Student") {
       sql += sql.includes("WHERE")
         ? " AND EXISTS (SELECT 1 FROM orders o WHERE o.order_id = p.order_id AND o.user_id = ?)"
@@ -73,6 +71,8 @@ export async function GET(request: Request) {
 
       params.push(session.userId);
     }
+
+    sql += " ORDER BY p.payment_id DESC";
 
     const [payments] = await pool.execute<PaymentRow[]>(sql, params);
 
